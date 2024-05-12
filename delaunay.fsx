@@ -110,13 +110,9 @@ module SVG =
 <title>SVG</title>
 </head>
 <body>
-    <div width=200 height=200>
-        <svg width=200 height=100% viewBox="0 0 200 200">
 """
 
     let private footer = """
-        </svg>
-    </div>
 </body>
 </html>
 """
@@ -133,6 +129,60 @@ module SVG =
         |> String.concat " "
         |> sprintf """<polygon points="%s" stroke-dasharray="1,1" style="fill:lightyellow;stroke: Black;stroke-width:0.5" />"""
 
+    type Shape =
+        | Point of Point
+        | Line of (Point * Point)
+        | Poly of Point []
+
+    let minMax (points: seq<Point>) =
+        let xs = points |> Seq.map (fun pt -> pt.X)
+        let ys = points |> Seq.map (fun pt -> pt.Y)
+        let smallest = { X = xs |> Seq.min; Y = ys |> Seq.min }
+        let largest = { X = xs |> Seq.max; Y = ys |> Seq.max }
+        smallest, largest
+
+    let points (shape: Shape) =
+        match shape with
+        | Point pt -> seq { pt }
+        | Line (pt1, pt2) -> seq { pt1; pt2 }
+        | Poly pts -> pts |> Seq.ofArray
+
+    let scale (s: float) (smallest: Point, largest: Point) (point: Point) =
+        let size =
+            let width = largest.X - smallest.X
+            let height = largest.Y - smallest.Y
+            max width height
+        {
+            X = (point.X - smallest.X) * s / size
+            Y = (point.Y - smallest.Y) * s / size
+        }
+
+    let rescale (s: float) box (shape: Shape) =
+        let f = scale s box
+        match shape with
+        | Point pt -> Point (f pt)
+        | Line (pt1, pt2) -> Line (f pt1, f pt2)
+        | Poly pts -> Poly (pts |> Array.map f)
+
+    let prepare (scale: float) (shapes: seq<Shape>) =
+        let pts = shapes |> Seq.collect points
+        let box = pts |> minMax
+        let rescaled = shapes |> Seq.map (rescale scale box)
+        let elements =
+            rescaled
+            |> Seq.map (fun shape ->
+                match shape with
+                | Point pt -> circle pt
+                | Line (pt1, pt2) -> line (pt1, pt2)
+                | Poly pts -> polygon pts
+                )
+            |> String.concat Environment.NewLine
+        $"""
+    <svg width="{scale}" height="{scale}">
+    {elements}
+    </svg>
+"""
+
     let render (content: string) =
         sprintf $"""
 {header}
@@ -140,10 +190,15 @@ module SVG =
 {footer}
 """
 
+    let print (scale: float) (shapes: seq<Shape>) =
+        shapes
+        |> prepare scale
+        |> render
+
 let pts =
     let rng = Random 0
-    Array.init 10 (fun _ ->
-        { X = rng.NextDouble() * 100.0; Y = rng.NextDouble() * 100.0 }
+    Array.init 20 (fun _ ->
+        { X = rng.NextDouble(); Y = rng.NextDouble() }
         )
 
 let delaunay =
@@ -153,16 +208,15 @@ let delaunay =
 delaunay
 |> Array.collect (fun triangle ->
     [|
-        triangle.A |> SVG.circle
-        triangle.B |> SVG.circle
-        triangle.C |> SVG.circle
+        triangle.A |> SVG.Point
+        triangle.B |> SVG.Point
+        triangle.C |> SVG.Point
         yield!
             triangle.Edges
-            |> Array.map SVG.line
+            |> Array.map SVG.Line
     |]
     )
-|> String.concat "\n"
-|> SVG.render
+|> SVG.print 200.0
 |> fun svg ->
     File.WriteAllText(
         Path.Combine(__SOURCE_DIRECTORY__, "delaunay.html"),
