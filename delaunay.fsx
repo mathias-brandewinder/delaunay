@@ -167,6 +167,16 @@ module SVG =
     let prepare (scale: float) (shapes: seq<Shape>) =
         let pts = shapes |> Seq.collect points
         let box = pts |> minMax
+        let size =
+            let smallest, largest = box
+            let width = largest.X - smallest.X
+            let height = largest.Y - smallest.Y
+            max width height
+        let margin = size / 20.0
+        let box =
+            let smallest, largest = box
+            { X = smallest.X - margin; Y = smallest.Y - margin },
+            { X = largest.X + margin; Y = largest.Y + margin }
         let rescaled = shapes |> Seq.map (rescale scale box)
         let elements =
             rescaled
@@ -196,7 +206,7 @@ module SVG =
         |> render
 
 let pts =
-    let rng = Random 0
+    let rng = Random ()
     Array.init 20 (fun _ ->
         { X = rng.NextDouble(); Y = rng.NextDouble() }
         )
@@ -216,7 +226,7 @@ delaunay
             |> Array.map SVG.Line
     |]
     )
-|> SVG.print 200.0
+|> SVG.print 300.0
 |> fun svg ->
     File.WriteAllText(
         Path.Combine(__SOURCE_DIRECTORY__, "delaunay.html"),
