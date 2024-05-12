@@ -4,19 +4,36 @@
 open System
 open System.IO
 
+[<Literal>]
+let PI = Math.PI
+
 type Point = { X: float; Y: float }
-
-// vertex = point / corner / junction
-// method
-// 1 triangle: circle center
-
-let distance (a, b) =
-    sqrt (pown (a.X - b.X) 2 + pown (a.Y - b.Y) 2)
 
 type Circle = {
     Center: Point
     Radius: float
     }
+
+[<CustomEquality; NoComparison>]
+type Edge = {
+    Point1: Point
+    Point2: Point
+    }
+    with
+    override this.Equals(other) =
+        match other with
+        | :? Edge as edge ->
+            edge.Point1 = this.Point1 && edge.Point2 = this.Point2
+            ||
+            edge.Point2 = this.Point1 && edge.Point1 = this.Point2
+        | _ -> false
+    override this.GetHashCode() =
+        17
+        + 23 * this.Point1.GetHashCode()
+        + 23 * this.Point2.GetHashCode()
+
+let distance (a, b) =
+    sqrt (pown (a.X - b.X) 2 + pown (a.Y - b.Y) 2)
 
 // https://en.wikipedia.org/wiki/Circumcircle#Cartesian_coordinates_2
 let circumCircle (a, b, c) =
@@ -43,11 +60,6 @@ let c = { X = -1.0; Y = 1.0 }
 
 circumCircle (a, b, c)
 
-let edge (pt1: Point, pt2: Point) =
-    if pt1 <= pt2
-    then (pt1, pt2)
-    else (pt2, pt1)
-
 type Triangle = {
     A: Point
     B: Point
@@ -61,41 +73,67 @@ type Triangle = {
         distance (circle.Center, pt) < circle.Radius
     member this.Edges =
         [|
-            (this.A, this.B)
-            (this.B, this.C)
-            (this.C, this.A)
+            { Point1 = this.A; Point2 = this.B }
+            { Point1 = this.B; Point2 = this.C }
+            { Point1 = this.C; Point2 = this.A }
         |]
-        |> Array.map edge
 
-// TODO fix this
-let superTriangle (points: Point []) = {
-    A = { X = 1000.0; Y = -500.0 }
-    B = { X = -1000.0; Y = 500.0 }
-    C = { X = 0; Y = 1000.0 }
+
+let superTriangle (points: Point []) =
+    // circle that contains every point
+    let center = {
+        X = points |> Array.averageBy (fun pt -> pt.X)
+        Y = points |> Array.averageBy (fun pt -> pt.Y)
+        }
+    let radius =
+        points
+        |> Array.map (fun pt -> distance (center, pt))
+        |> Array.max
+    // 2.0 * radius is the minimum,
+    // we use 2.1 to have a margin and avoid having points on the outer triangle
+    let outerRadius = radius * 2.1
+    {
+        A = {
+            X = center.X
+            Y = center.Y + outerRadius
+            }
+        B = {
+            X = center.X + outerRadius * cos (PI / 6.0)
+            Y = center.Y - outerRadius * sin (PI / 6.0)
+            }
+        C = {
+            X = center.X - outerRadius * cos (PI / 6.0)
+            Y = center.Y - outerRadius * sin (PI / 6.0)
+            }
     }
 
 // https://en.wikipedia.org/wiki/Bowyer%E2%80%93Watson_algorithm#Pseudocode
 let bowyerWatson (points: Point []) =
+
     let superTriangle = superTriangle points
     let superVertexes = set [ superTriangle.A; superTriangle.B; superTriangle.C ]
     let triangulation = Array.singleton superTriangle
+
     (triangulation, points)
-    ||> Array.fold (fun tri point ->
+    ||> Array.fold (fun currentTriangulation point ->
         let badTriangles, goodTriangles =
-            tri
+            currentTriangulation
             |> Array.partition (fun triangle -> triangle.IsInside point)
+        // find edges that are not shared
         let polygon =
             badTriangles
             |> Array.collect (fun t -> t.Edges)
             |> Array.countBy id
             |> Array.filter (fun (edge, count) -> count = 1)
             |> Array.map fst
+        // form new triangles with polygon edges
         (goodTriangles, polygon)
-        ||> Array.fold (fun triangulation (a, b) ->
-            let triangle = { A = a; B = b; C = point }
+        ||> Array.fold (fun triangulation edge ->
+            let triangle = { A = edge.Point1; B = edge.Point2; C = point }
             Array.append triangulation (Array.singleton triangle)
             )
         )
+    // remove the initial outer triangle
     |> Array.filter (fun triangle ->
         let vertexes = set [ triangle.A; triangle.B; triangle.C ]
         Set.intersect vertexes superVertexes
@@ -131,7 +169,7 @@ module SVG =
 
     type Shape =
         | Point of Point
-        | Line of (Point * Point)
+        | Line of Edge
         | Poly of Point []
 
     let minMax (points: seq<Point>) =
@@ -144,7 +182,7 @@ module SVG =
     let points (shape: Shape) =
         match shape with
         | Point pt -> seq { pt }
-        | Line (pt1, pt2) -> seq { pt1; pt2 }
+        | Line edge -> seq { edge.Point1; edge.Point2 }
         | Poly pts -> pts |> Seq.ofArray
 
     let scale (s: float) (smallest: Point, largest: Point) (point: Point) =
@@ -161,7 +199,7 @@ module SVG =
         let f = scale s box
         match shape with
         | Point pt -> Point (f pt)
-        | Line (pt1, pt2) -> Line (f pt1, f pt2)
+        | Line edge -> Line { Point1 = f edge.Point1; Point2 = f edge.Point2 }
         | Poly pts -> Poly (pts |> Array.map f)
 
     let prepare (scale: float) (shapes: seq<Shape>) =
@@ -183,7 +221,7 @@ module SVG =
             |> Seq.map (fun shape ->
                 match shape with
                 | Point pt -> circle pt
-                | Line (pt1, pt2) -> line (pt1, pt2)
+                | Line edge -> line (edge.Point1, edge.Point2)
                 | Poly pts -> polygon pts
                 )
             |> String.concat Environment.NewLine
@@ -206,7 +244,7 @@ module SVG =
         |> render
 
 let pts =
-    let rng = Random ()
+    let rng = Random 0
     Array.init 20 (fun _ ->
         { X = rng.NextDouble(); Y = rng.NextDouble() }
         )
