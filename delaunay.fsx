@@ -15,17 +15,17 @@ type Circle = {
     }
 
 [<CustomEquality; NoComparison>]
-type Edge = {
+type Segment = {
     Point1: Point
     Point2: Point
     }
     with
     override this.Equals(other) =
         match other with
-        | :? Edge as edge ->
-            edge.Point1 = this.Point1 && edge.Point2 = this.Point2
+        | :? Segment as segment ->
+            segment.Point1 = this.Point1 && segment.Point2 = this.Point2
             ||
-            edge.Point2 = this.Point1 && edge.Point1 = this.Point2
+            segment.Point2 = this.Point1 && segment.Point1 = this.Point2
         | _ -> false
     override this.GetHashCode() =
         17
@@ -128,8 +128,8 @@ let bowyerWatson (points: Point []) =
             |> Array.map fst
         // form new triangles with polygon edges
         (goodTriangles, polygon)
-        ||> Array.fold (fun triangulation edge ->
-            let triangle = { A = edge.Point1; B = edge.Point2; C = point }
+        ||> Array.fold (fun triangulation segment ->
+            let triangle = { A = segment.Point1; B = segment.Point2; C = point }
             Array.append triangulation (Array.singleton triangle)
             )
         )
@@ -155,10 +155,12 @@ module SVG =
 </html>
 """
 
-    let circle (pt: Point) =
+    let point (pt: Point) =
         $"""<ellipse cx="{pt.X}" cy="{pt.Y}" rx="3" ry="3"></ellipse>"""
 
-    let line (pt1: Point, pt2: Point) =
+    let segment (segment: Segment) =
+        let pt1 = segment.Point1
+        let pt2 = segment.Point2
         $"""<line x1="{pt1.X}" y1="{pt1.Y}" x2="{pt2.X}" y2="{pt2.Y}" style="stroke: Black;stroke-width:1" />"""
 
     let polygon (pts: seq<Point>) =
@@ -169,7 +171,7 @@ module SVG =
 
     type Shape =
         | Point of Point
-        | Line of Edge
+        | Segment of Segment
         | Poly of Point []
 
     let minMax (points: seq<Point>) =
@@ -182,7 +184,7 @@ module SVG =
     let points (shape: Shape) =
         match shape with
         | Point pt -> seq { pt }
-        | Line edge -> seq { edge.Point1; edge.Point2 }
+        | Segment segment -> seq { segment.Point1; segment.Point2 }
         | Poly pts -> pts |> Seq.ofArray
 
     let scale (s: float) (smallest: Point, largest: Point) (point: Point) =
@@ -199,7 +201,7 @@ module SVG =
         let f = scale s box
         match shape with
         | Point pt -> Point (f pt)
-        | Line edge -> Line { Point1 = f edge.Point1; Point2 = f edge.Point2 }
+        | Segment segment -> Segment { Point1 = f segment.Point1; Point2 = f segment.Point2 }
         | Poly pts -> Poly (pts |> Array.map f)
 
     let prepare (scale: float) (shapes: seq<Shape>) =
@@ -220,8 +222,8 @@ module SVG =
             rescaled
             |> Seq.map (fun shape ->
                 match shape with
-                | Point pt -> circle pt
-                | Line edge -> line (edge.Point1, edge.Point2)
+                | Point pt -> point pt
+                | Segment seg -> segment seg
                 | Poly pts -> polygon pts
                 )
             |> String.concat Environment.NewLine
@@ -245,7 +247,7 @@ module SVG =
 
 let pts =
     let rng = Random 0
-    Array.init 20 (fun _ ->
+    Array.init 50 (fun _ ->
         { X = rng.NextDouble(); Y = rng.NextDouble() }
         )
 
@@ -261,7 +263,7 @@ delaunay
         triangle.C |> SVG.Point
         yield!
             triangle.Edges
-            |> Array.map SVG.Line
+            |> Array.map SVG.Segment
     |]
     )
 |> SVG.print 300.0
