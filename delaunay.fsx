@@ -91,7 +91,7 @@ let superTriangle (points: Point []) =
         |> Array.max
     // 2.0 * radius is the minimum,
     // we use 2.1 to have a margin and avoid having points on the outer triangle
-    let outerRadius = radius * 2.1
+    let outerRadius = radius * 10.0
     {
         A = {
             X = center.X
@@ -134,11 +134,52 @@ let bowyerWatson (points: Point []) =
             )
         )
     // remove the initial outer triangle
-    |> Array.filter (fun triangle ->
+    |> Array.partition (fun triangle ->
         let vertexes = set [ triangle.A; triangle.B; triangle.C ]
         Set.intersect vertexes superVertexes
         |> Set.isEmpty
         )
+    |> fun (delaunay, outside) ->
+        {|
+            Delaunay = delaunay
+            // points that belong to the outer boundary
+            Boundary =
+                let edges =
+                    outside
+                    |> Array.collect (fun triangle ->
+                        triangle.Edges
+                        |> Array.filter (fun edge ->
+                            not (superVertexes.Contains edge.Point1)
+                            &&
+                            not (superVertexes.Contains edge.Point2)
+                        )
+                        )
+                    |> Array.distinct
+                    |> List.ofArray
+                let rec buildPolygon poly rest =
+                    match rest with
+                    | [] -> poly
+                    | rest ->
+                        let polyHead = poly |> List.head
+                        let next =
+                            rest
+                            |> List.tryFind (fun edge ->
+                                edge.Point1 = polyHead
+                                ||
+                                edge.Point2 = polyHead
+                                )
+                        match next with
+                        | None -> poly
+                        | Some edge ->
+                            let pt =
+                                if edge.Point1 = polyHead
+                                then edge.Point2
+                                else edge.Point1
+                            buildPolygon (pt :: poly) (rest |> List.filter (fun e -> e <> edge))
+                let hd :: tl = edges
+                buildPolygon [ hd.Point1; hd.Point2] tl
+                |> Array.ofList
+        |}
 
 module SVG =
     let private header = """
@@ -255,7 +296,7 @@ let delaunay =
     pts
     |> bowyerWatson
 
-delaunay
+delaunay.Delaunay
 |> Array.collect (fun triangle ->
     [|
         triangle.A |> SVG.Point
@@ -266,6 +307,16 @@ delaunay
             |> Array.map SVG.Segment
     |]
     )
+|> SVG.print 300.0
+|> fun svg ->
+    File.WriteAllText(
+        Path.Combine(__SOURCE_DIRECTORY__, "delaunay.html"),
+        svg
+        )
+
+delaunay.Boundary
+|> SVG.Poly
+|> Array.singleton
 |> SVG.print 300.0
 |> fun svg ->
     File.WriteAllText(
