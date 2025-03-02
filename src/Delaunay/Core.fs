@@ -13,7 +13,7 @@ module BowyerWatson =
     let superTriangle (points: seq<Point>): Triangle =
 
         let xs =
-            points 
+            points
             |> Seq.map (fun pt -> pt.X)
             |> Array.ofSeq
         let xMin = xs |> Array.min
@@ -87,6 +87,33 @@ module Plot =
         | Point of (Point * int)
         | Polygon of list<Point>
 
+    let viewbox (shapes: seq<Shape>) =
+        let xs =
+            shapes
+            |> Seq.collect (fun shape ->
+                match shape with
+                | Point (pt, radius) ->
+                    seq { pt.X - float radius; pt.X + float radius }
+                | Polygon points ->
+                    points |> Seq.map (fun pt -> pt.X)
+                )
+        let ys =
+            shapes
+            |> Seq.collect (fun shape ->
+                match shape with
+                | Point (pt, radius) ->
+                    seq { pt.Y - float radius; pt.Y + float radius }
+                | Polygon points ->
+                    points |> Seq.map (fun pt -> pt.Y)
+                )
+
+        let xMin = xs |> Seq.min
+        let xMax = xs |> Seq.max
+        let yMin = ys |> Seq.min
+        let yMax = ys |> Seq.max
+
+        (xMin, yMin, xMax, yMax)
+
     let render (style: seq<Style>) (shape: Shape) =
         let style =
             style
@@ -105,3 +132,25 @@ module Plot =
             |> String.concat " "
             |> fun points ->
                 $"""<polygon points="{points}" {style}/>"""
+
+    let polygon (style: list<Style>) (points: list<Point>) =
+        Polygon points, style
+
+    let point (style: list<Style>) (point: Point, radius: int) =
+        Point(point, radius), style
+
+    let plot (width: int, height: int) (styledShapes: list<Shape * list<Style>>) =
+        let xmin, ymin, xmax, ymax =
+            styledShapes
+            |> List.map fst
+            |> viewbox
+        let viewbox = $"viewbox=\"{xmin} {ymin} {xmax} {ymax}\""
+        let contents =
+            styledShapes
+            |> List.map (fun (shape, style) ->
+                let display = render style shape
+                $"  {display}"
+                )
+            |> String.concat System.Environment.NewLine
+
+        $"<svg width=\"{width}\" height=\"{height}\" {viewbox}>{System.Environment.NewLine}{contents}{System.Environment.NewLine}</svg>"

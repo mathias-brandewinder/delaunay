@@ -17,23 +17,21 @@ let triangle = BowyerWatson.superTriangle points
 
 [
     // render super triangle as a polygon
-    [ triangle.A; triangle.B; triangle.C ]
-    |> Polygon
-    |> Plot.render
+    polygon
         [
             Style.Fill (Fill.Color "lightyellow")
             Style.Stroke (Stroke.Color "black")
             Style.Stroke (Stroke.Width 1)
             Style.Stroke (Stroke.Dashes [ 1; 1 ])
         ]
+        [ triangle.A; triangle.B; triangle.C ]
     // render each point
-    for point in points do
-        (point, 4)
-        |> Point
-        |> Plot.render
+    for pt in points do
+        point
             [
                 Style.Fill (Fill.Color "white")
                 Style.Stroke (Stroke.Color "black")
             ]
+            (pt, 4)
 ]
-|> String.concat System.Environment.NewLine
+|> Plot.plot (400, 400)
