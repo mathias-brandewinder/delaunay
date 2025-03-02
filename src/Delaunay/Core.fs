@@ -125,7 +125,7 @@ module Plot =
             |> String.concat " "
         match shape with
         | Point (point, radius) ->
-            $"""<ellipse cx="{point.X}" cy="{point.Y}" rx="{radius}" ry="{radius}" {style}/>"""
+            $"""<circle cx="{point.X}" cy="{point.Y}" r="{radius}" {style}/>"""
         | Polygon points ->
             points
             |> Seq.map (fun pt -> $"{pt.X},{pt.Y}")
