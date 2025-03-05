@@ -26,22 +26,22 @@ module BowyerWatson =
         let yMin = ys |> Array.min
         let yMax = ys |> Array.max
 
-        let squareWidth =
-            max (xMax - xMin) (yMax - yMin)
+        let xSize = xMax - xMin
+        let ySize = yMax - yMin
 
         let pointA = {
-            X = xMin - 0.5 * squareWidth
+            X = xMin - 0.5 * xSize
             Y = yMin
             }
 
         let pointB = {
-            X = xMin + 1.5 * squareWidth
+            X = xMin + 1.5 * xSize
             Y = yMin
             }
 
         let pointC = {
-            X = xMin + 0.5 * squareWidth
-            Y = yMin + 2.0 * squareWidth
+            X = xMin + 0.5 * xSize
+            Y = yMin + 2.0 * ySize
             }
 
         {
@@ -86,6 +86,7 @@ module Plot =
     type Shape =
         | Point of (Point * int)
         | Polygon of list<Point>
+        | Label of (Point * string)
 
     let viewbox (shapes: seq<Shape>) =
         let xs =
@@ -96,6 +97,9 @@ module Plot =
                     seq { pt.X - float radius; pt.X + float radius }
                 | Polygon points ->
                     points |> Seq.map (fun pt -> pt.X)
+                | Label (pt, text) ->
+                    // TODO refine, assume char ~ 10 pixels
+                    seq { pt.X; pt.X + float text.Length * 10.0 }
                 )
         let ys =
             shapes
@@ -105,6 +109,9 @@ module Plot =
                     seq { pt.Y - float radius; pt.Y + float radius }
                 | Polygon points ->
                     points |> Seq.map (fun pt -> pt.Y)
+                | Label (pt, text) ->
+                    // TODO refine, assume char ~ 10 pixels
+                    seq { pt.Y; pt.Y + 10.0 }
                 )
 
         let xMin = xs |> Seq.min
@@ -112,7 +119,10 @@ module Plot =
         let yMin = ys |> Seq.min
         let yMax = ys |> Seq.max
 
-        (xMin, yMin, xMax, yMax)
+        let xSize = xMax - xMin
+        let ySize = yMax - yMin
+
+        (xMin, yMin, xSize, ySize)
 
     let render (style: seq<Style>) (shape: Shape) =
         let style =
@@ -132,12 +142,16 @@ module Plot =
             |> String.concat " "
             |> fun points ->
                 $"""<polygon points="{points}" {style}/>"""
+        | Label (pt, text) ->
+            $"<text x=\"{pt.X}\" y=\"{pt.Y}\">{text}</text>"
 
     let polygon (style: list<Style>) (points: list<Point>) =
         Polygon points, style
 
     let point (style: list<Style>) (point: Point, radius: int) =
         Point(point, radius), style
+
+    let label (point: Point, text: string) = Label(point, text), []
 
     let plot (width: int, height: int) (styledShapes: list<Shape * list<Style>>) =
         let xmin, ymin, xmax, ymax =
