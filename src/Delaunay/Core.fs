@@ -84,9 +84,10 @@ module Plot =
         | Fill of Fill.Attr
 
     type Shape =
-        | Point of (Point * int)
+        | Point of (Point * float)
         | Polygon of list<Point>
         | Label of (Point * string)
+        | Circle of (Point * float)
 
     let viewbox (shapes: seq<Shape>) =
         let xs =
@@ -94,7 +95,9 @@ module Plot =
             |> Seq.collect (fun shape ->
                 match shape with
                 | Point (pt, radius) ->
-                    seq { pt.X - float radius; pt.X + float radius }
+                    seq { pt.X - radius; pt.X + radius }
+                | Circle (pt, radius) ->
+                    seq { pt.X - radius; pt.X + radius }
                 | Polygon points ->
                     points |> Seq.map (fun pt -> pt.X)
                 | Label (pt, text) ->
@@ -106,7 +109,9 @@ module Plot =
             |> Seq.collect (fun shape ->
                 match shape with
                 | Point (pt, radius) ->
-                    seq { pt.Y - float radius; pt.Y + float radius }
+                    seq { pt.Y - radius; pt.Y + radius }
+                | Circle (pt, radius) ->
+                    seq { pt.Y - radius; pt.Y + radius }
                 | Polygon points ->
                     points |> Seq.map (fun pt -> pt.Y)
                 | Label (pt, text) ->
@@ -136,6 +141,8 @@ module Plot =
         match shape with
         | Point (point, radius) ->
             $"""<circle cx="{point.X}" cy="{point.Y}" r="{radius}" {style}/>"""
+        | Circle (point, radius) ->
+            $"""<circle cx="{point.X}" cy="{point.Y}" r="{radius}" {style}/>"""
         | Polygon points ->
             points
             |> Seq.map (fun pt -> $"{pt.X},{pt.Y}")
@@ -150,6 +157,9 @@ module Plot =
 
     let point (style: list<Style>) (point: Point, radius: int) =
         Point(point, radius), style
+
+    let circle (style: list<Style>) (point: Point, radius: int) =
+        Circle(point, radius), style
 
     let label (point: Point, text: string) = Label(point, text), []
 
