@@ -1,14 +1,31 @@
 ﻿namespace Delaunay
 
-type Point = { X: float; Y: float }
+module Geometry =
 
-type Triangle = {
-    A: Point
-    B: Point
-    C: Point
-    }
+    type Point = { X: float; Y: float }
+
+    type Triangle = {
+        A: Point
+        B: Point
+        C: Point
+        }
+
+    type Circle = {
+        Center: Point
+        Radius: float
+        }
+
+    let distance (a: Point, b: Point) =
+        sqrt (pown (a.X - b.X) 2 + pown (a.Y - b.Y) 2)
+
+    [<RequireQualifiedAccess>]
+    module Circle =
+        let isInside (circle: Circle) (pt: Point) =
+            distance (pt, circle.Center) <= circle.Radius
 
 module BowyerWatson =
+
+    open Geometry
 
     let superTriangle (points: seq<Point>): Triangle =
 
@@ -50,7 +67,33 @@ module BowyerWatson =
             C = pointC
         }
 
+    // https://en.wikipedia.org/wiki/Circumcircle#Cartesian_coordinates_2
+    let circumCircle (triangle: Triangle) =
+
+        let a, b, c = triangle.A, triangle.B, triangle.C
+
+        let d = 2.0 * (a.X * (b.Y - c.Y) + b.X * (c.Y - a.Y) + c.X * (a.Y - b.Y))
+        let x =
+            (pown a.X 2 + pown a.Y 2) * (b.Y - c.Y)
+            +
+            (pown b.X 2 + pown b.Y 2) * (c.Y - a.Y)
+            +
+            (pown c.X 2 + pown c.Y 2) * (a.Y - b.Y)
+        let y =
+            (pown a.X 2 + pown a.Y 2) * (c.X - b.X)
+            +
+            (pown b.X 2 + pown b.Y 2) * (a.X - c.X)
+            +
+            (pown c.X 2 + pown c.Y 2) * (b.X - a.X)
+
+        let center = { X = x / d; Y = y / d }
+        let radius = distance (center, a)
+
+        { Center = center; Radius = radius }
+
 module Plot =
+
+    open Geometry
 
     let setAttribute name value = $"{name}=\"{value}\""
 
@@ -158,7 +201,7 @@ module Plot =
     let point (style: list<Style>) (point: Point, radius: int) =
         Point(point, radius), style
 
-    let circle (style: list<Style>) (point: Point, radius: int) =
+    let circle (style: list<Style>) (point: Point, radius: float) =
         Circle(point, radius), style
 
     let label (point: Point, text: string) = Label(point, text), []
