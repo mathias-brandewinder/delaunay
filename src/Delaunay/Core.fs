@@ -91,6 +91,61 @@ module BowyerWatson =
 
         { Center = center; Radius = radius }
 
+    let addPoint (point: Point) (triangles: Triangle []) =
+        let badTriangles, goodTriangles =
+            triangles
+            |> Array.partition (fun triangle ->
+                let circumCircle = circumCircle triangle
+                // does not read well, review
+                point
+                |> Circle.isInside circumCircle
+                )
+        let edge (pt1: Point, pt2: Point) =
+            if pt1.X < pt2.X
+            then pt1, pt2
+            elif pt1.X > pt2.X
+            then pt2, pt1
+            else
+                if pt1.Y < pt2.Y
+                then pt1, pt2
+                else pt2, pt1
+
+        let uniqueEdges =
+            badTriangles
+            |> Array.collect (fun triangle ->
+                [|
+                    triangle.A, triangle.B
+                    triangle.B, triangle.C
+                    triangle.C, triangle.A
+                |]
+                )
+            |> Array.map edge
+            |> Array.countBy id
+            |> Array.filter (fun (_, count) -> count = 1)
+            |> Array.map fst
+
+        let newTriangles =
+            uniqueEdges
+            |> Array.map (fun (a, b) ->
+                { A = a; B = b; C = point }
+                )
+
+        Array.append goodTriangles newTriangles
+
+    let delaunay (points: seq<Point>) =
+        let corners (triangle: Triangle) =
+            set [ triangle.A; triangle.B; triangle.C ]
+        let initial = superTriangle points
+        let initialCorners = corners initial
+        ([| initial |], points)
+        ||> Seq.fold (fun triangulation point ->
+            addPoint point triangulation
+            )
+        |> Array.filter (fun triangle ->
+            Set.intersect (corners triangle) initialCorners
+            |> Set.isEmpty
+            )
+
 module Plot =
 
     open Geometry
@@ -170,7 +225,9 @@ module Plot =
         let xSize = xMax - xMin
         let ySize = yMax - yMin
 
-        (xMin, yMin, xSize, ySize)
+        let margin = 0.05
+
+        (xMin - margin * xSize, yMin - margin * ySize, xSize * (1.0 + (2. * margin)), ySize * (1.0 + (2. * margin)))
 
     let render (style: seq<Style>) (shape: Shape) =
         let style =
