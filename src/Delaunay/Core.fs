@@ -20,7 +20,8 @@ module Geometry =
 
     [<RequireQualifiedAccess>]
     module Circle =
-        let isInside (circle: Circle) (pt: Point) =
+
+        let contains (pt: Point) (circle: Circle) =
             distance (pt, circle.Center) <= circle.Radius
 
 module BowyerWatson =
@@ -95,10 +96,9 @@ module BowyerWatson =
         let badTriangles, goodTriangles =
             triangles
             |> Array.partition (fun triangle ->
-                let circumCircle = circumCircle triangle
-                // does not read well, review
-                point
-                |> Circle.isInside circumCircle
+                triangle
+                |> circumCircle
+                |> Circle.contains point
                 )
         let edge (pt1: Point, pt2: Point) =
             if pt1.X < pt2.X
