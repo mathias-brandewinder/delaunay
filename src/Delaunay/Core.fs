@@ -48,13 +48,13 @@ module BowyerWatson =
         let ySize = yMax - yMin
 
         let pointA = {
-            X = xMin - 0.5 * xSize
-            Y = yMin
+            X = xMin - 1.0 * xSize
+            Y = yMin - 0.5 * ySize
             }
 
         let pointB = {
-            X = xMin + 1.5 * xSize
-            Y = yMin
+            X = xMin + 2.0 * xSize
+            Y = yMin - 0.5 * ySize
             }
 
         let pointC = {
