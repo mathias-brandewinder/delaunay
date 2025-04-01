@@ -155,10 +155,10 @@ module Plot =
     module Stroke =
         type Attr =
             | Color of string
-            | Width of int
+            | Width of float
             | Dashes of seq<int>
         let color value = setAttribute "stroke" value
-        let width (value:int) = setAttribute "stroke-width" value
+        let width (value:float) = setAttribute "stroke-width" value
         let dashes pattern =
             pattern
             |> Seq.map string
@@ -187,43 +187,94 @@ module Plot =
         | Label of (Point * string)
         | Circle of (Point * float)
 
+    type Dimension = {
+        Width: float
+        Height: float
+        }
+
+    type Box = {
+        TopLeft: Point
+        BottomRight: Point
+        }
+        with
+        member this.Width =
+            this.BottomRight.X - this.TopLeft.X
+        member this.Height =
+            this.BottomRight.Y - this.TopLeft.Y
+
+    let merge (box1: Box) (box2: Box) =
+        {
+            TopLeft = {
+                X = min box1.TopLeft.X box2.TopLeft.X
+                Y = min box1.TopLeft.Y box2.TopLeft.Y
+                }
+            BottomRight = {
+                X = max box1.BottomRight.X box2.BottomRight.X
+                Y = max box1.BottomRight.Y box2.BottomRight.Y
+                }
+        }
+
+    let box (shape: Shape) =
+        match shape with
+        | Point (point, size) ->
+            {
+                TopLeft = {
+                    X = point.X - size
+                    Y = point.Y - size
+                    }
+                BottomRight = {
+                    X = point.X + size
+                    Y = point.Y + size
+                    }
+            }
+        | Circle (center, radius) ->
+            {
+                TopLeft = {
+                    X = center.X - radius
+                    Y = center.Y - radius
+                    }
+                BottomRight = {
+                    X = center.X + radius
+                    Y = center.Y + radius
+                    }
+            }
+        | Polygon points ->
+            let xs = points |> List.map (fun pt -> pt.X)
+            let ys = points |> List.map (fun pt -> pt.Y)
+            {
+                TopLeft = {
+                    X = xs |> List.min
+                    Y = ys |> List.min
+                    }
+                BottomRight = {
+                    X = xs |> List.max
+                    Y = ys |> List.max
+                    }
+            }
+        | Label (point, text) ->
+            {
+                TopLeft = {
+                    X = point.X
+                    Y = point.Y
+                    }
+                BottomRight = {
+                    X = point.X + float text.Length * 10.0
+                    Y = point.Y + 10.0
+                    }
+            }
+
     let viewbox (shapes: seq<Shape>) =
-        let xs =
-            shapes
-            |> Seq.collect (fun shape ->
-                match shape with
-                | Point (pt, radius) ->
-                    seq { pt.X - radius; pt.X + radius }
-                | Circle (pt, radius) ->
-                    seq { pt.X - radius; pt.X + radius }
-                | Polygon points ->
-                    points |> Seq.map (fun pt -> pt.X)
-                | Label (pt, text) ->
-                    // TODO refine, assume char ~ 10 pixels
-                    seq { pt.X; pt.X + float text.Length * 10.0 }
-                )
-        let ys =
-            shapes
-            |> Seq.collect (fun shape ->
-                match shape with
-                | Point (pt, radius) ->
-                    seq { pt.Y - radius; pt.Y + radius }
-                | Circle (pt, radius) ->
-                    seq { pt.Y - radius; pt.Y + radius }
-                | Polygon points ->
-                    points |> Seq.map (fun pt -> pt.Y)
-                | Label (pt, text) ->
-                    // TODO refine, assume char ~ 10 pixels
-                    seq { pt.Y; pt.Y + 10.0 }
-                )
 
-        let xMin = xs |> Seq.min
-        let xMax = xs |> Seq.max
-        let yMin = ys |> Seq.min
-        let yMax = ys |> Seq.max
+        let fullBox =
+            shapes
+            |> Seq.map box
+            |> Seq.reduce merge
 
-        let xSize = xMax - xMin
-        let ySize = yMax - yMin
+        let xMin = fullBox.TopLeft.X
+        let yMin = fullBox.TopLeft.Y
+
+        let xSize = fullBox.Width
+        let ySize = fullBox.Height
 
         let margin = 0.05
 
@@ -263,7 +314,7 @@ module Plot =
 
     let label (point: Point, text: string) = Label(point, text), []
 
-    let plot (width: int, height: int) (styledShapes: list<Shape * list<Style>>) =
+    let plot (width: float, height: float) (styledShapes: list<Shape * list<Style>>) =
         let xmin, ymin, xmax, ymax =
             styledShapes
             |> List.map fst
