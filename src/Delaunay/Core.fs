@@ -28,7 +28,7 @@ module BowyerWatson =
 
     open Geometry
 
-    let superTriangle (points: seq<Point>): Triangle =
+    let superTriangleOLD (points: seq<Point>): Triangle =
 
         let xs =
             points
@@ -91,6 +91,70 @@ module BowyerWatson =
         let radius = distance (center, a)
 
         { Center = center; Radius = radius }
+
+    let superTriangle (points: seq<Point>) =
+        let points = points |> Array.ofSeq
+        let len = points.Length
+        let circles =
+            seq {
+                for p1 in 0 .. len - 3 do
+                    for p2 in (p1 + 1) .. len - 2 do
+                        for p3 in (p2 + 1) .. len - 1 ->
+                            {
+                                A = points.[p1]
+                                B = points.[p2]
+                                C = points.[p3]
+                            }
+                            |> circumCircle
+                            |> fun c -> { c with Radius = c.Radius * 1.1 }
+                }
+        let xs =
+            circles
+            |> Seq.collect (fun circle ->
+                seq {
+                    circle.Center.X - circle.Radius
+                    circle.Center.X + circle.Radius }
+                )
+            |> Array.ofSeq
+        let ys =
+            circles
+            |> Seq.collect (fun circle ->
+                seq {
+                    circle.Center.Y - circle.Radius
+                    circle.Center.Y + circle.Radius
+                    }
+                )
+            |> Array.ofSeq
+
+        let xMin = xs |> Array.min
+        let xMax = xs |> Array.max
+
+        let yMin = ys |> Array.min
+        let yMax = ys |> Array.max
+
+        let xSize = xMax - xMin
+        let ySize = yMax - yMin
+
+        let pointA = {
+            X = xMin - 1.0 * xSize
+            Y = yMin - 0.5 * ySize
+            }
+
+        let pointB = {
+            X = xMin + 2.0 * xSize
+            Y = yMin - 0.5 * ySize
+            }
+
+        let pointC = {
+            X = xMin + 0.5 * xSize
+            Y = yMin + 2.0 * ySize
+            }
+
+        {
+            A = pointA
+            B = pointB
+            C = pointC
+        }
 
     let addPoint (point: Point) (triangles: Triangle []) =
         let badTriangles, goodTriangles =
